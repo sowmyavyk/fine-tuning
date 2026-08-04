@@ -12,7 +12,7 @@ class FintechFineTuner:
         self,
         base_model_name: str = "mlx-community/Qwen2.5-1.5B-4bit",
         output_dir: str = "finetuned_model",
-        max_seq_length: int = 512,
+        max_seq_length: int = 1024,
     ):
         self.base_model_name = base_model_name
         self.output_dir = output_dir
@@ -54,10 +54,16 @@ class FintechFineTuner:
         train_data: list,
         eval_data: Optional[list] = None,
         num_epochs: int = 3,
-        batch_size: int = 4,
+        batch_size: int = 2,
         learning_rate: float = 2e-4,
         gradient_accumulation_steps: int = 4,
-        max_seq_length: int = 512,
+        max_seq_length: int = 1024,
+        weight_decay: float = 0.01,
+        warmup_ratio: float = 0.1,
+        lr_scheduler_type: str = "cosine",
+        logging_steps: int = 10,
+        save_steps: int = 200,
+        eval_steps: int = 200,
     ):
         train_dataset = Dataset.from_list(train_data)
         eval_dataset = Dataset.from_list(eval_data) if eval_data else None
@@ -68,12 +74,17 @@ class FintechFineTuner:
             per_device_train_batch_size=batch_size,
             gradient_accumulation_steps=gradient_accumulation_steps,
             learning_rate=learning_rate,
+            weight_decay=weight_decay,
+            lr_scheduler_type=lr_scheduler_type,
+            warmup_ratio=warmup_ratio,
             max_seq_length=max_seq_length,
             dataset_text_field="text",
             packing=False,
-            logging_steps=10,
-            save_steps=200,
+            logging_steps=logging_steps,
+            save_steps=save_steps,
             save_total_limit=2,
+            val_batches=eval_steps if eval_data else 0,
+            steps_per_eval=eval_steps if eval_data else 0,
         )
 
         trainer = SFTTrainer(
