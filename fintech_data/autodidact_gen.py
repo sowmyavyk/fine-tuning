@@ -15,12 +15,12 @@ load_dotenv()
 from data_processor import DataProcessor
 
 SYSTEM_PROMPT = """You are a fintech compliance tutor grounded in Indian regulatory documents (PMLA 2002, PML(Maintenance of Records) Rules 2005, FIU-IND enforcement orders, SEBI documents).
-Read the source passage carefully. Generate ONE high-quality, exam-style question and its answer, BOTH strictly grounded in the passage text — do NOT add outside knowledge.
+Read the source passage carefully. Generate THREE high-quality, exam-style questions and answers, ALL strictly grounded in the passage text — do NOT add outside knowledge.
 
 Requirements:
-- The question must require reasoning ABOUT the passage (interpretation, application, "what does this mean for a reporting entity"), not a trivia lookup.
-- The answer must be a clear, well-structured response (2-5 sentences) that directly cites/references the passage content.
-- Output ONLY valid JSON with keys: "question" and "answer".
+- Each question must require reasoning ABOUT the passage (interpretation, application, "what does this mean for a reporting entity"), not a trivia lookup.
+- Each answer must be clear and well-structured (2-5 sentences) directly referencing the passage content.
+- Output ONLY valid JSON with the form: {"pairs": [{"question": "...", "answer": "..."}, ...]} with exactly 3 pairs.
 - Do not include the source text in the output.
 """
 
@@ -81,43 +81,51 @@ class AutoDidactGenerator:
 
     def _generate_one(self, chunk: str, source_label: str, url: str) -> list:
         """Generate up to 3 grounded Q&A pairs from one chunk."""
-        try:
-            resp = self.client.chat.completions.create(
-                model=self.model,
-                messages=[
-                    {"role": "system", "content": SYSTEM_PROMPT},
-                    {"role": "user", "content": f"SOURCE PASSAGE:\n{chunk}\n\nGenerate the Q&A pairs as JSON."},
-                ],
-                temperature=0.5,
-                max_tokens=1200,
-            )
-            text = resp.choices[0].message.content.strip()
-            text = re.sub(r"^```(?:json)?|```$", "", text, flags=re.M).strip()
-            parsed = json.loads(text)
-            raw_pairs = parsed.get("pairs", [])
-            if isinstance(parsed, list):
-                raw_pairs = parsed
-            out = []
-            for item in raw_pairs:
-                question = str(item.get("question", "")).strip()
-                answer = str(item.get("answer", "")).strip()
-                if not question or not answer:
+        for attempt in range(4):
+            try:
+                resp = self.client.chat.completions.create(
+                    model=self.model,
+                    messages=[
+                        {"role": "system", "content": SYSTEM_PROMPT},
+                        {"role": "user", "content": f"SOURCE PASSAGE:\n{chunk}\n\nGenerate the Q&A pairs as JSON."},
+                    ],
+                    temperature=0.5,
+                    max_tokens=1200,
+                )
+                text = resp.choices[0].message.content.strip()
+                text = re.sub(r"^```(?:json)?|```$", "", text, flags=re.M).strip()
+                parsed = json.loads(text)
+                raw_pairs = parsed.get("pairs", [])
+                if isinstance(parsed, list):
+                    raw_pairs = parsed
+                out = []
+                for item in raw_pairs:
+                    question = str(item.get("question", "")).strip()
+                    answer = str(item.get("answer", "")).strip()
+                    if not question or not answer:
+                        continue
+                    if self.processor.is_gibberish(answer):
+                        continue
+                    out.append({
+                        "instruction": question,
+                        "response": answer,
+                        "domain": "autodidact_grounded",
+                        "source": "autodidact",
+                        "source_doc": source_label,
+                        "url": url,
+                        "model": self.model,
+                    })
+                return out
+            except Exception as e:
+                msg = str(e)
+                if "429" in msg or "rate_limit" in msg.lower():
+                    wait = min(60, 5 * (2 ** attempt))
+                    print(f"    rate limited, waiting {wait}s...")
+                    time.sleep(wait)
                     continue
-                if self.processor.is_gibberish(answer):
-                    continue
-                out.append({
-                    "instruction": question,
-                    "response": answer,
-                    "domain": "autodidact_grounded",
-                    "source": "autodidact",
-                    "source_doc": source_label,
-                    "url": url,
-                    "model": self.model,
-                })
-            return out
-        except Exception as e:
-            print(f"    gen ERR: {str(e)[:80]}")
-            return []
+                print(f"    gen ERR: {msg[:80]}")
+                return []
+        return []
 
     def generate_from_docs(
         self,
@@ -149,7 +157,7 @@ class AutoDidactGenerator:
                 if produced % 50 == 0:
                     self._save()
                     print(f"  progress: {produced}/{target_pairs}")
-            time.sleep(0.3)
+            time.sleep(1.0)
 
         self._save()
         print(f"Done: {produced} grounded pairs")
