@@ -52,10 +52,11 @@ class AutoDidactGenerator:
         max_workers: int = 1,
         cache_file: str = "data/fintech_data_grounded.json",
         max_regen: int = 3,
+        progress_file: Optional[str] = None,
     ):
         self.model = model
         self.cache_file = Path(cache_file)
-        self.progress_file = Path(PROGRESS_FILE)
+        self.progress_file = Path(progress_file or os.getenv("AUTODIDACT_PROGRESS", PROGRESS_FILE))
         self.processor = DataProcessor()
         self.max_regen = max_regen
         self.api_key = os.getenv("DEEPSEEK_API_KEY", "").strip()
@@ -379,16 +380,21 @@ def load_source_docs(*filenames: str) -> list:
 
 
 if __name__ == "__main__":
-    all_docs = load_source_docs(
-        "data/autodidact_source_docs.json",
-        "data/gov_blogs.json",
-        "data/gov_source_docs.json",
-    )
+    sources = os.getenv("AUTODIDACT_SOURCES", "").split(",")
+    if any(sources):
+        all_docs = load_source_docs(*[s.strip() for s in sources if s.strip()])
+    else:
+        all_docs = load_source_docs(
+            "data/autodidact_source_docs.json",
+            "data/gov_blogs.json",
+            "data/gov_source_docs.json",
+        )
     print(f"Total source docs: {len(all_docs)}")
 
     target = int(os.getenv("AUTODIDACT_TARGET", "10000"))
     max_regen = int(os.getenv("AUTODIDACT_MAX_REGEN", "3"))
-    gen = AutoDidactGenerator(max_regen=max_regen)
+    cache_file = os.getenv("AUTODIDACT_CACHE", "data/fintech_data_grounded.json")
+    gen = AutoDidactGenerator(max_regen=max_regen, cache_file=cache_file)
 
     # AutoDidact: DeepSeek generates grounded QA from FIU-IND + SEBI + blogs.
     # Counts ONLY DeepSeek-generated pairs (domain=autodidact_grounded) toward

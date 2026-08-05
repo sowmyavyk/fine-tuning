@@ -157,6 +157,72 @@ class DatasetBuilder:
         print(f"RBI master direction PDFs -> {len(pairs)} chunk pairs")
         return pairs
 
+    def fetch_rbi_source_docs(self, max_pdfs: int = 135, out_file: str = "data/rbi_source_docs.json") -> list:
+        """Download RBI master direction PDFs as RAW source docs (for DeepSeek).
+
+        Produces grounded Q&A later via autodidact_gen. Runs independently of
+        the running DeepSeek job (writes only to out_file).
+        """
+        import json as _json
+
+        index_url = "https://www.rbi.org.in/Scripts/BS_ViewMasterDirections.aspx"
+        resp = self.session.get(index_url, timeout=30)
+        soup = BeautifulSoup(resp.text, "lxml")
+
+        relevant_terms = [
+            "kyc", "aml", "know your customer", "deposit", "credit",
+            "lending", "customer", "information", "cyber", "risk",
+            "governance", "fraud", "digital", "payment",
+        ]
+        docs = []
+        for a in soup.find_all("a", href=True):
+            href = a["href"]
+            if "BS_ViewMasDirections" not in href:
+                continue
+            tr = a.find_parent("tr")
+            pdf_link = None
+            if tr:
+                for pdf_a in tr.find_all("a", href=True):
+                    if ".pdf" in pdf_a["href"].lower():
+                        pdf_link = pdf_a["href"]
+                        break
+            title = a.get_text(strip=True)
+            if not title or not pdf_link:
+                continue
+            if not any(t in title.lower() for t in relevant_terms):
+                continue
+            docs.append({"title": title, "url": pdf_link})
+        print(f"Relevant RBI master direction PDFs: {len(docs)}")
+
+        out = []
+        for i, doc in enumerate(docs[:max_pdfs]):
+            try:
+                r = self.session.get(doc["url"], timeout=60)
+                r.raise_for_status()
+                reader = PdfReader(BytesIO(r.content))
+                text = "\n".join((pg.extract_text() or "") for pg in reader.pages)
+                text = re.sub(r"[^\x00-\x7F]+", "", text)
+                text = re.sub(r"\n{3,}", "\n", text).strip()
+                if len(text) < 500:
+                    continue
+                out.append({
+                    "title": f"RBI {doc['title'][:80]}",
+                    "url": doc["url"],
+                    "text": text[:50000],
+                    "source": "rbi_master_directions",
+                })
+                print(f"  [{i+1}/{len(docs[:max_pdfs])}] {doc['title'][:50]}: {len(text)} chars")
+            except Exception as e:
+                print(f"  error {doc['title'][:40]}: {e}")
+            time.sleep(0.5)
+
+        path = Path(out_file)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with open(path, "w", encoding="utf-8") as f:
+            _json.dump(out, f, ensure_ascii=False, indent=1)
+        print(f"Saved {len(out)} RBI source docs to {path}")
+        return out
+
     def _rbi_chunks_to_pairs(self, chunks: list) -> list:
         pairs = []
         for chunk in chunks:
