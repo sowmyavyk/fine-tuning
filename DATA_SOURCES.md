@@ -4,7 +4,7 @@
 - Loader: `AutoDidactGenerator.load_hf_dataset()` in `fintech_data/autodidact_gen.py`
 - Dataset: `Priyanshu-24/adaption-indian-finance-qa` (28,894 rows)
 - Filter: banking_regulation / capital_markets / digital_payments, or source=RBI
-- Output: `data/fintech_data_autodidact.json` (6,460 pairs, `source=hf_adaption_indian_finance`)
+- Output: `data/fintech_data_autodidact.json` (7,750 pairs, `source=hf_adaption_indian_finance`)
 - NOT run in the DeepSeek generation job (pure download, no API cost)
 - Can be re-run any time with `python -c "from fintech_data.autodidact_gen import AutoDidactGenerator; AutoDidactGenerator().load_hf_dataset()"`
 
@@ -16,6 +16,19 @@
 - Re-mining: each 900-char chunk can be mined up to `AUTODIDACT_MAX_REGEN` (default 3) times
 - Chunk cache: `data/autodidact_progress.json` (skips already-mined chunks, no token waste)
 
+## 2b. DeepSeek-generated (RBI Master Directions) — paid, grounded in RBI PDFs
+- Fetcher: `DatasetBuilder.fetch_rbi_source_docs()` in `fintech_data/build_20k_dataset.py`
+- Sources: 135 RBI Master Direction PDFs (KYC/AML/deposits/lending/fraud/cyber/digital payments), 5.66M chars
+- Raw docs: `data/rbi_source_docs.json` (135 docs)
+- Generator: same `autodidact_gen.py`, isolated via env vars (runs in parallel with job 2a):
+  ```
+  AUTODIDACT_SOURCES=data/rbi_source_docs.json \
+  AUTODIDACT_CACHE=data/fintech_data_grounded_rbi.json \
+  AUTODIDACT_PROGRESS=data/autodidact_progress_rbi.json
+  ```
+- Output: `data/fintech_data_grounded_rbi.json` (target 10,000 pairs)
+- Chunk cache: `data/autodidact_progress_rbi.json` (separate from job 2a, no collision)
+
 ## 3. Reliable base (free, non-API)
 - Builder: `fintech_data/build_20k_dataset.py`
 - Sources: GLM-5.2-Finance (HF), RakeshMadasani (HF), RBI Master Direction PDFs
@@ -25,3 +38,8 @@
 - Crawler: `fintech_data/gov_fetcher.py`
 - Output: `data/gov_source_docs.json` (SEBI + blogs + reports), `data/gov_blogs.json`
 - Robots.txt verified per site; blocked sites (IRDAI, PFRDA, NPCI, MCA, DigiLocker) skipped
+
+## Merge policy (model.ipynb cell 6)
+- **All grounded pairs kept** (FIU-IND + RBI, no cap) — they're generated from real regulatory text
+- Caps apply only to raw sources: HF 8,000 / reliable 12,000
+- Estimated final pool: ~44,750 pairs before quality filter (~30+ char, non-repetitive, no template echo)
