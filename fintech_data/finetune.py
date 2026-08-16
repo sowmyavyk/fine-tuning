@@ -54,16 +54,17 @@ class FintechFineTuner:
         train_data: list,
         eval_data: Optional[list] = None,
         num_epochs: int = 3,
-        batch_size: int = 2,
+        batch_size: int = 1,
         learning_rate: float = 2e-4,
-        gradient_accumulation_steps: int = 4,
+        gradient_accumulation_steps: int = 8,
         max_seq_length: int = 1024,
         weight_decay: float = 0.01,
         warmup_ratio: float = 0.1,
         lr_scheduler_type: str = "cosine",
         logging_steps: int = 10,
-        save_steps: int = 200,
-        eval_steps: int = 200,
+        save_steps: int = 400,
+        eval_steps: int = 1000,
+        val_batches: int = 32,
     ):
         train_dataset = Dataset.from_list(train_data)
         eval_dataset = Dataset.from_list(eval_data) if eval_data else None
@@ -83,7 +84,7 @@ class FintechFineTuner:
             logging_steps=logging_steps,
             save_steps=save_steps,
             save_total_limit=2,
-            val_batches=eval_steps if eval_data else 0,
+            val_batches=val_batches if eval_data else 0,
             steps_per_eval=eval_steps if eval_data else 0,
         )
 
@@ -117,6 +118,7 @@ class FintechFineTuner:
     def inference(self, prompt: str, max_tokens: int = 512, temperature: float = 0.7) -> str:
         from mlx_lm import generate
         from mlx_lm.sample_utils import make_sampler
+        from clean_stream import clean_text
         messages = [
             {"role": "system", "content": "You are an Indian fintech regulatory expert. Answer clearly and accurately."},
             {"role": "user", "content": prompt},
@@ -124,7 +126,7 @@ class FintechFineTuner:
         text = self.tokenizer.apply_chat_template(
             messages, tokenize=False, add_generation_prompt=True
         )
-        return generate(
+        out = generate(
             self.model,
             self.tokenizer,
             prompt=text,
@@ -132,3 +134,4 @@ class FintechFineTuner:
             sampler=make_sampler(temp=temperature, top_p=0.9),
             verbose=False,
         ).strip()
+        return clean_text(out)
