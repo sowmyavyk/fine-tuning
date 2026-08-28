@@ -4,6 +4,15 @@
 
 Ask it about CKYC, KYC, AML, VKYC, CERSAI, PMLA 2002, or Aadhaar eKYC and it answers like a compliance officer — grounded in actual Indian regulations.
 
+## 🚀 Try it live
+
+**https://web-jet-nine-12.vercel.app**
+
+A live demo UI of the real fine-tuned model (Qwen2.5-1.5B + LoRA) with RAG-grounded answers and cited sources.
+
+> **Note:** the model backend runs on free tier GPUs (Kaggle), which are session-based and spin down when idle. If the chat returns a 404, a backend session isn't running —
+> start one with `deploy/kaggle/finlens_kaggle_backend.py` and point the UI's ⚙️ "Model backend URL" setting at the printed `trycloudflare.com` address.
+
 ## The problem
 
 Legal/regulatory text is dense. Generic models hallucinate on "What is CKYC?" or "DKYC vs VKYC?". We want a small model that answers *correctly* and *grounded in real rules* — and runs on a laptop.
@@ -66,6 +75,21 @@ AUTODIDACT_PROGRESS=data/autodidact_progress_rbi.json \
 - **Balanced** — caps apply to the *raw* sources (8k HF / 12k reliable) so generated data never gets drowned out
 - **Source-attributed** — every pair tracks its origin doc + URL
 - **Robots-polite** — crawls only sites that allow it
+
+## Deployment (real model, free tier)
+
+The real fine-tuned model is served with the same `serve.py` backend the UI talks to — RAG citation lookup + token-streaming SSE over `POST /api/chat`:
+
+| Piece | Where | Cost |
+|---|---|---|
+| UI | Vercel (static) — **https://web-jet-nine-12.vercel.app** | free, always-on |
+| Model backend | Kaggle GPU (`deploy/kaggle/finlens_kaggle_backend.py`) | free, 30h GPU/wk, session-based |
+| Adapter weights | Hugging Face `Sowmyavyk/qwen-fintech-adapter` | free, storage only |
+| RAG data + backend source | Hugging Face `Sowmyavyk/finlens-gguf` | free, storage only |
+
+- The UI reads the backend URL at runtime from the ⚙️ settings (stored in `localStorage`), so you can re-point it at a fresh tunnel URL without redeploying.
+- Run `deploy/kaggle/finlens_kaggle_backend.py` on a Kaggle GPU notebook, copy the printed tunnel URL, paste it into the UI settings.
+- All backend docker/caddy/oracle self-host variants live under `deploy/`.
 
 ## Files
 
