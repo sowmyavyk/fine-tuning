@@ -115,12 +115,12 @@ class FintechFineTuner:
         )
         print(f"Inference model loaded from {adapter_path}")
 
-    def inference(self, prompt: str, max_tokens: int = 512, temperature: float = 0.7) -> str:
+    def inference(self, prompt: str, max_tokens: int = 1024, temperature: float = 0.4) -> str:
         from mlx_lm import generate
-        from mlx_lm.sample_utils import make_sampler
+        from mlx_lm.sample_utils import make_sampler, make_repetition_penalty
         from clean_stream import clean_text
         messages = [
-            {"role": "system", "content": "You are an Indian fintech regulatory expert. Answer clearly and accurately."},
+            {"role": "system", "content": "You are an Indian fintech regulatory expert. Give DETAILED, comprehensive answers: define terms, cite relevant acts/sections (PMLA 2002, RBI KYC Master Directions, FIU-IND rules), list obligations and steps, and include examples. Do not be brief."},
             {"role": "user", "content": prompt},
         ]
         text = self.tokenizer.apply_chat_template(
@@ -132,6 +132,7 @@ class FintechFineTuner:
             prompt=text,
             max_tokens=max_tokens,
             sampler=make_sampler(temp=temperature, top_p=0.9),
+            logits_processors=[make_repetition_penalty(1.15)],
             verbose=False,
         ).strip()
         return clean_text(out)

@@ -1,0 +1,10 @@
+fastapi>=0.110
+uvicorn[standard]>=0.29
+pydantic>=2.6
+transformers>=4.44
+peft>=0.12
+accelerate>=0.34
+torch>=2.3
+safetensors>=0.4
+sentencepiece>=0.2
+huggingface-hub>=0.24

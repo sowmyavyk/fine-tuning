@@ -1,0 +1,64 @@
+name: finlens
+
+# FinLens production deployment for Oracle Cloud Always Free ARM (Ampere A1).
+#   - ARM64 images (node:22-alpine / python:3.11-slim both support arm64)
+#   - CPU inference (Oracle free tier has no GPU) — 24GB RAM is plenty
+#   - Caddy reverse proxy: auto-HTTPS, clients reach https://<your-domain>
+#   - Only the frontend (via Caddy :80/:443) is exposed; backend stays internal
+#
+# Usage (on the Oracle VM):
+#   docker compose -f docker-compose.oracle.yml up -d --build
+#
+# Env (see deploy/.env.example.oracle):
+#   DEVICE=cpu   DOMAIN=finlens.example.com   MAX_TOKENS=1024   TEMP=0.4
+
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    platform: linux/arm64
+    environment:
+      - MODEL_NAME=${MODEL_NAME:-Qwen/Qwen2.5-1.5B}
+      - ADAPTER_DIR=/app/model/adapter
+      - DEVICE=cpu
+      - MAX_TOKENS=${MAX_TOKENS:-1024}
+      - TEMP=${TEMP:-0.4}
+    volumes:
+      # Persist downloaded base weights across restarts (ARM build of Qwen fits RAM)
+      - hf-cache:/app/.cache/huggingface
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ../web
+      dockerfile: ../deploy/frontend/Dockerfile
+      args:
+        - BACKEND_INTERNAL_URL=http://backend:8000
+    platform: linux/arm64
+    environment:
+      - BACKEND_INTERNAL_URL=http://backend:8000
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+  caddy:
+    image: caddy:2-alpine
+    platform: linux/arm64
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      - DOMAIN=${DOMAIN}
+    volumes:
+      - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      - frontend
+    restart: unless-stopped
+
+volumes:
+  hf-cache:
+  caddy-data:
+  caddy-config:

@@ -1,0 +1,5 @@
+transformers>=4.44
+peft>=0.12
+accelerate>=0.34
+sentencepiece>=0.2
+safetensors>=0.4

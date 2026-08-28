@@ -31,8 +31,8 @@ SOURCE_INDEX = None
 class ChatRequest(BaseModel):
     message: str
     history: list = []
-    temperature: float = 0.7
-    max_tokens: int = 512
+    temperature: float = 0.4
+    max_tokens: int = 1024
     num_citations: int = 3
 
 
@@ -100,6 +100,7 @@ def chat(req: ChatRequest):
     async def event_stream():
         from mlx_lm import generate as gen
         from mlx_lm.sample_utils import make_sampler as ms
+        from mlx_lm.sample_utils import make_repetition_penalty as mrp
         from clean_stream import clean_stream
 
         sampler = ms(temp=req.temperature, top_p=0.9)
@@ -109,6 +110,7 @@ def chat(req: ChatRequest):
             prompt=text,
             max_tokens=req.max_tokens,
             sampler=sampler,
+            logits_processors=[mrp(1.15)],
             verbose=False,
         )
         for piece in clean_stream(stream):

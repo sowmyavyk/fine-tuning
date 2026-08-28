@@ -1,0 +1,43 @@
+name: finlens
+
+# FinLens deployable — open-source stack.
+#   backend:  FastAPI + transformers/PEFT (Qwen2.5-1.5B + LoRA adapter)
+#   frontend: Next.js standalone
+# Model + adapter + RAG data ship inside the image; the base weights are
+# downloaded from Hugging Face on first start (cache in ./hf-cache).
+
+services:
+  backend:
+    build:
+      context: ./backend
+      # Point at the image the build needs; adapter+data are already in backend/
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      - MODEL_NAME=${MODEL_NAME:-Qwen/Qwen2.5-1.5B}
+      - ADAPTER_DIR=/app/model/adapter
+      - DEVICE=${DEVICE:-auto}
+      - MAX_TOKENS=${MAX_TOKENS:-1024}
+      - TEMP=${TEMP:-0.4}
+    volumes:
+      # Persist downloaded base weights across restarts
+      - hf-cache:/app/.cache/huggingface
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ../web
+      dockerfile: ../deploy/frontend/Dockerfile
+      args:
+        - BACKEND_INTERNAL_URL=http://backend:8000
+    ports:
+      - "3000:3000"
+    environment:
+      - BACKEND_INTERNAL_URL=http://backend:8000
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+volumes:
+  hf-cache:

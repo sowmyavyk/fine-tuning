@@ -1,0 +1,22 @@
+# Python
+.env
+.venv
+venv
+__pycache__
+*.pyc
+.DS_Store
+*.pem
+huggingface
+
+# Vercel / Next.js
+web/.next
+web/.env*
+web/out
+
+# Research scratch (not part of the project)
+.firecrawl/
+
+# Deployment runtime blobs — duplicated on Hugging Face and fetched at runtime
+deploy/**/data/
+deploy/**/model/
+deploy/**/__pycache__/

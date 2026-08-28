@@ -1,0 +1,5 @@
+# FinLens — Caddy reverse proxy (auto-HTTPS via Let's Encrypt).
+# DOMAIN is injected from the compose environment.
+{$DOMAIN} {
+    reverse_proxy frontend:3000
+}

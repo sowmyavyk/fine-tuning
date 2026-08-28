@@ -29,9 +29,29 @@ import {
   Trash2,
   ExternalLink,
   Landmark,
+  Settings,
 } from "lucide-react";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+// Backend base URL precedence:
+//   1. A URL the user set at runtime (stored in localStorage) — lets you point
+//      the UI at a live model without rebuilding/redeploying.
+//   2. NEXT_PUBLIC_API_URL (build-time env).
+//   3. Same-origin /api/* (Next.js rewrites to the backend).
+const ENV_API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
+const API_URL_KEY = "finlens.modelUrl";
+
+function getApiUrl(): string {
+  try {
+    const saved = window.localStorage.getItem(API_URL_KEY);
+    if (saved && saved.trim()) return saved.trim();
+  } catch {}
+  return ENV_API_URL;
+}
+function setApiUrl(url: string) {
+  try {
+    window.localStorage.setItem(API_URL_KEY, url.trim());
+  } catch {}
+}
 
 type Source = {
   source_doc: string;
@@ -128,6 +148,9 @@ export default function Home() {
   const [isStreaming, setIsStreaming] = useState(false);
   const [isThinking, setIsThinking] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showSettings, setShowSettings] = useState(false);
+  const [modelUrl, setModelUrl] = useState<string>(() => getApiUrl());
+  const [modelUrlSaved, setModelUrlSaved] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const abortRef = useRef<AbortController | null>(null);
 
@@ -157,7 +180,7 @@ export default function Home() {
     abortRef.current = controller;
 
     try {
-      const res = await fetch(`${API_URL}/api/chat`, {
+      const res = await fetch(`${getApiUrl()}/api/chat`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ message: text, history }),
@@ -304,8 +327,64 @@ export default function Home() {
                 </TooltipTrigger>
                 <TooltipContent>Clear chat</TooltipContent>
               </Tooltip>
+              <Tooltip>
+                <TooltipTrigger
+                  render={
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => {
+                        setModelUrl(getApiUrl());
+                        setModelUrlSaved(false);
+                        setShowSettings((v) => !v);
+                      }}
+                      aria-label="Settings"
+                    />
+                  }
+                >
+                  <Settings className="h-4 w-4" />
+                </TooltipTrigger>
+                <TooltipContent>Model URL</TooltipContent>
+              </Tooltip>
             </div>
           </div>
+          {showSettings && (
+            <div className="border-b bg-background/95 backdrop-blur">
+              <div className="mx-auto w-full max-w-3xl px-4 py-3">
+                <div className="flex flex-col gap-2 rounded-xl border bg-muted/40 p-3 sm:flex-row sm:items-end">
+                  <div className="flex-1 space-y-1">
+                    <label className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                      Model backend URL
+                    </label>
+                    <input
+                      value={modelUrl}
+                      onChange={(e) => {
+                        setModelUrl(e.target.value);
+                        setModelUrlSaved(false);
+                      }}
+                      placeholder="https://xxx.trycloudflare.com"
+                      className="w-full rounded-md border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring"
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Paste the live Kaggle tunnel URL (no trailing slash). Used
+                      for /api/chat. Stored locally in your browser.
+                    </p>
+                  </div>
+                  <Button
+                    size="sm"
+                    onClick={() => {
+                      setApiUrl(modelUrl);
+                      setModelUrlSaved(true);
+                      setTimeout(() => setModelUrlSaved(false), 1500);
+                    }}
+                  >
+                    <Check className="h-4 w-4" />
+                    {modelUrlSaved ? "Saved" : "Save"}
+                  </Button>
+                </div>
+              </div>
+            </div>
+          )}
         </header>
 
         <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col px-4 py-6">

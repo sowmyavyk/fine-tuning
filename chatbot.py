@@ -7,13 +7,15 @@ import gradio as gr
 from citation_lookup import build_index
 
 BASE_MODEL = "mlx-community/Qwen2.5-1.5B-4bit"
-ADAPTER_DIR = Path("fintech_finetuned_qwen/adapters")
+ADAPTER_DIR = Path("fintech_finetuned_qwen/adapters_colab")
 
 SYSTEM_PROMPT = (
     "You are an Indian fintech regulatory compliance expert grounded in RBI, SEBI, "
-    "FIU-IND, and PMLA regulations. Answer accurately and concisely. If you are not "
-    "sure, say so rather than guessing. Reference the relevant regulation or provision "
-    "when you can."
+    "FIU-IND, and PMLA regulations. Give DETAILED, comprehensive answers: define the "
+    "terms, explain the purpose, cite the relevant acts/sections (PMLA 2002, RBI KYC "
+    "Master Directions, FIU-IND reporting rules), list practical obligations and "
+    "step-by-step processes, and include examples. Write in full paragraphs — do not "
+    "be brief. If you are not sure, say so rather than guessing."
 )
 
 MODEL = None
@@ -53,7 +55,7 @@ def retrieve_context(message: str, k: int = 3) -> tuple:
 
 def respond(message, history):
     from mlx_lm import generate
-    from mlx_lm.sample_utils import make_sampler
+    from mlx_lm.sample_utils import make_sampler, make_repetition_penalty
     from clean_stream import clean_stream
 
     if MODEL is None:
@@ -81,8 +83,9 @@ def respond(message, history):
         MODEL,
         TOKENIZER,
         prompt=text,
-        max_tokens=512,
-        sampler=make_sampler(temp=0.7, top_p=0.9),
+        max_tokens=1024,
+        sampler=make_sampler(temp=0.4, top_p=0.9),
+        logits_processors=[make_repetition_penalty(1.15)],
         verbose=False,
     )
     for piece in clean_stream(stream):
